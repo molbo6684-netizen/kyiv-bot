@@ -11,39 +11,43 @@ if not TOKEN:
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Список ID або username каналів/груп, звідки потрібно брати інформацію (можна додавати скільки завгодно через кому)
+# Використовуємо 1 основний топ-канал, щоб не було дублювання інформації
 SOURCE_CHAT_IDS = [
-    "@kyiv_info_live_radar",  # Приклад першого джерела
-    "@kyivskyi_kupol",        # Приклад другого джерела
-    # -100111111111           # Можна додавати і через числовий ID якщо це закрита група
+    "@war_monitor",  # Головний детальний моніторинг цілей
 ]
 
-# ID вашої групи, куди бот повинен автоматично надсилати сповіщення
-TARGET_GROUP_ID = -1001234567890  # Замініть на ID вашої цільової групи
+TARGET_GROUP_ID = -1004335784419  # <--- Впишіть сюди ID вашої групи (з мінусом на початку)
+
+# Зберігаємо останнє повідомлення, щоб уникнути спаму та повторів
+last_sent_message = ""
 
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message):
-    await message.answer("Бот для авто-моніторингу тривог з кількох джерел запущено! 🛡")
+    await message.answer("Бот авто-моніторингу запрацював без дублів! 🛡")
 
-# Автоматичний перехоплювач повідомлень
 @dp.message()
 async def auto_forward_alert(message: types.Message):
-    # Визначаємо ідентифікатор поточного чату (або юзернейм з @, або числовий ID)
+    global last_sent_message
+    
     chat_identifier = f"@{message.chat.username}" if message.chat.username else message.chat.id
     
-    # Перевіряємо, чи є чат у нашому списку джерел
     if chat_identifier in SOURCE_CHAT_IDS or message.chat.id in SOURCE_CHAT_IDS:
         if message.text:
-            # Фільтруємо за ключовими словами, щоб не пересилати зайве
-            keywords = ["бпла", "ракета", "курс", "летить", "вибух", "тривога", "хід", "ціль"]
+            # Захист від повторення однакових повідомлень підряд
+            if message.text == last_sent_message:
+                return  # Пропускаємо, якщо таке повідомлення щойно було
+            
+            keywords = ["бпла", "ракета", "курс", "летить", "вибух", "тривога", "хід", "ціль", "київ"]
             text_lower = message.text.lower()
             
             if any(word in text_lower for word in keywords):
+                last_sent_message = message.text   запам'ятовуємо текст
+                
                 alert_message = f"🚨 **ОПЕРАТИВНИЙ МОНІТОРИНГ** 🚨\n\n{message.text}"
                 try:
                     await bot.send_message(chat_id=TARGET_GROUP_ID, text=alert_message, parse_mode="Markdown")
                 except Exception as e:
-                    print(f"Помилка відправки в цільову групу: {e}")
+                    print(f"Помилка відправки в групу: {e}")
 
 async def main():
     print("Бот запускається...")
